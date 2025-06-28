@@ -51,40 +51,80 @@ class SuffolkMapScraper:
             self.driver.get(self.map_url)
             
             # Wait for the page to load
-            time.sleep(5)
+            time.sleep(8)
             
-            # Wait for the map container to be present
-            map_container = self.wait.until(
-                EC.presence_of_element_located((By.ID, "the-map"))
-            )
+            # Try multiple selectors for the map container
+            map_selectors = [
+                "#the-map",
+                ".map",
+                "[id*='map']",
+                "[class*='map']",
+                "iframe",
+                "[src*='google']",
+                "[src*='map']"
+            ]
+            
+            map_container = None
+            for selector in map_selectors:
+                try:
+                    logging.info(f'Trying map selector: {selector}')
+                    map_container = self.wait.until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                    )
+                    logging.info(f'Found map container with selector: {selector}')
+                    break
+                except TimeoutException:
+                    continue
+            
+            if not map_container:
+                # If no specific map container found, just wait for page body
+                logging.info('No specific map container found, waiting for page body')
+                self.wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
             
             # Wait additional time for the map and pins to fully load
-            time.sleep(10)
+            time.sleep(15)
             
-            logging.info('Map page loaded successfully')
+            # Check if we're on the right page by looking for expected content
+            page_source = self.driver.page_source.lower()
+            if 'suffolk' in page_source or 'member' in page_source or 'map' in page_source:
+                logging.info('Map page loaded successfully - Suffolk content detected')
+            else:
+                logging.warning('Map page loaded but Suffolk content not clearly detected')
             
-        except TimeoutException:
-            logging.error('Timeout waiting for map to load')
-            raise
         except Exception as e:
             logging.error(f'Error loading map page: {str(e)}')
+            # Log page source for debugging
+            try:
+                logging.info(f'Current page title: {self.driver.title}')
+                logging.info(f'Current page URL: {self.driver.current_url}')
+            except:
+                pass
             raise
 
     def find_map_pins(self):
         """Find all clickable pins on the map"""
         try:
+            logging.info('Starting pin search...')
+            
             # Look for various possible pin selectors
             pin_selectors = [
                 "img[src*='pushpin']",
-                "img[src*='pin']",
+                "img[src*='pin']", 
                 "img[src*='marker']",
+                "img[src*='colour']",  # Common in map pin naming
                 ".pushpin",
                 ".marker",
                 ".pin",
                 "area[shape='circle']",
                 "area[shape='rect']",
+                "area[onclick]",
                 "[onclick*='showInfo']",
-                "[onclick*='popup']"
+                "[onclick*='popup']",
+                "[onclick*='member']",
+                "[onclick*='info']",
+                "div[onclick]",
+                "span[onclick]",
+                "a[onclick]"
             ]
             
             all_pins = []
@@ -93,9 +133,10 @@ class SuffolkMapScraper:
                 try:
                     pins = self.driver.find_elements(By.CSS_SELECTOR, selector)
                     if pins:
-                        logging.info(f'Found {len(pins)} pins using selector: {selector}')
+                        logging.info(f'Found {len(pins)} elements using selector: {selector}')
                         all_pins.extend(pins)
                 except Exception as e:
+                    logging.debug(f'Selector {selector} failed: {str(e)}')
                     continue
             
             # Remove duplicates
@@ -105,21 +146,87 @@ class SuffolkMapScraper:
             for pin in all_pins:
                 try:
                     element_id = pin.get_attribute('outerHTML')
-                    if element_id not in seen_elements:
+                    if element_id and element_id not in seen_elements:
                         seen_elements.add(element_id)
                         unique_pins.append(pin)
                 except:
                     continue
             
-            # If no pins found with standard selectors, try to find clickable elements within map
+            # If no pins found with standard selectors, try broader search
             if not unique_pins:
-                logging.info('No pins found with standard selectors, searching within map container')
-                map_container = self.driver.find_element(By.ID, "the-map")
-                clickable_elements = map_container.find_elements(By.XPATH, ".//*[@onclick or @onmousedown or @onmouseup]")
-                unique_pins.extend(clickable_elements)
+                logging.info('No pins found with standard selectors, trying broader search...')
+                
+                # Try looking for any clickable elements
+                clickable_selectors = [
+                    "[onclick]",
+                    "[onmousedown]", 
+                    "[onmouseup]",
+                    "img[alt*='member']",
+                    "img[title*='member']",
+                    "a[href*='member']"
+                ]
+                
+                for selector in clickable_selectors:
+                    try:
+                        elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                        if elements:
+                            logging.info(f'Found {len(elements)} clickable elements with: {selector}')
+                            unique_pins.extend(elements)
+                    except:
+                        continue
             
-            logging.info(f'Found {len(unique_pins)} total unique pins')
-            return unique_pins
+            # If still no pins, search within any map containers found
+            if not unique_pins:
+                logging.info('Still no pins found, searching within all containers...')
+                container_selectors = [
+                    "#the-map",
+                    ".map",
+                    "[id*='map']",
+                    "[class*='map']",
+                    "div[style*='position']"
+                ]
+                
+                for container_sel in container_selectors:
+                    try:
+                        containers = self.driver.find_elements(By.CSS_SELECTOR, container_sel)
+                        for container in containers:
+                            clickable_elements = container.find_elements(By.XPATH, ".//*[@onclick or @onmousedown or @onmouseup or @href]")
+                            if clickable_elements:
+                                logging.info(f'Found {len(clickable_elements)} clickable elements in container: {container_sel}')
+                                unique_pins.extend(clickable_elements)
+                    except:
+                        continue
+            
+            # Final deduplication
+            final_pins = []
+            seen_final = set()
+            for pin in unique_pins:
+                try:
+                    pin_html = pin.get_attribute('outerHTML')
+                    if pin_html and pin_html not in seen_final:
+                        seen_final.add(pin_html)
+                        final_pins.append(pin)
+                except:
+                    continue
+            
+            logging.info(f'Found {len(final_pins)} total unique interactive elements')
+            
+            # If we still have no pins, log page source for debugging
+            if not final_pins:
+                logging.warning('No interactive elements found. Logging page info for debugging...')
+                try:
+                    logging.info(f'Page title: {self.driver.title}')
+                    logging.info(f'Page URL: {self.driver.current_url}')
+                    # Log a snippet of page source
+                    page_source = self.driver.page_source
+                    if len(page_source) > 1000:
+                        logging.info(f'Page source snippet: {page_source[:1000]}...')
+                    else:
+                        logging.info(f'Full page source: {page_source}')
+                except:
+                    pass
+            
+            return final_pins
             
         except Exception as e:
             logging.error(f'Error finding map pins: {str(e)}')
