@@ -1,0 +1,142 @@
+body {
+    background-color: #f8f9fa;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.card {
+    border: none;
+    border-radius: 10px;
+}
+
+.card-header {
+    border-radius: 10px 10px 0 0 !important;
+    background: linear-gradient(135deg, #007bff, #0056b3);
+}
+
+.btn {
+    border-radius: 6px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.progress {
+    border-radius: 10px;
+    background-color: #e9ecef;
+}
+
+.progress-bar {
+    border-radius: 10px;
+    background: linear-gradient(45deg, #28a745, #20c997);
+    transition: width 0.6s ease;
+}
+
+.card.bg-light {
+    border: 1px solid #dee2e6;
+    transition: transform 0.2s ease;
+}
+
+.card.bg-light:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+#logContainer {
+    border: 1px solid #495057;
+    background-color: #212529 !important;
+}
+
+.log-entry {
+    margin-bottom: 5px;
+    color: #fff;
+    font-size: 0.85em;
+}
+
+.log-entry:before {
+    content: "› ";
+    color: #28a745;
+    font-weight: bold;
+}
+
+.log-entry.error:before {
+    color: #dc3545;
+}
+
+.log-entry.warning:before {
+    color: #ffc107;
+}
+
+.log-entry.success:before {
+    color: #28a745;
+}
+
+.alert {
+    border-radius: 8px;
+    border: none;
+}
+
+.alert-info {
+    background-color: #e3f2fd;
+    color: #0277bd;
+    border-left: 4px solid #03a9f4;
+}
+
+.alert-success {
+    background-color: #e8f5e8;
+    color: #2e7d32;
+    border-left: 4px solid #4caf50;
+}
+
+.alert-danger {
+    background-color: #ffebee;
+    color: #c62828;
+    border-left: 4px solid #f44336;
+}
+
+.shadow {
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1) !important;
+}
+
+.text-muted a {
+    color: #6c757d;
+    text-decoration: none;
+}
+
+.text-muted a:hover {
+    color: #495057;
+    text-decoration: underline;
+}
+
+/* Animation for loading states */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.loading {
+    animation: pulse 1.5s infinite;
+}
+
+/* Custom scrollbar for log container */
+#logContainer::-webkit-scrollbar {
+    width: 8px;
+}
+
+#logContainer::-webkit-scrollbar-track {
+    background: #343a40;
+    border-radius: 4px;
+}
+
+#logContainer::-webkit-scrollbar-thumb {
+    background: #6c757d;
+    border-radius: 4px;
+}
+
+#logContainer::-webkit-scrollbar-thumb:hover {
+    background: #adb5bd;
+}
