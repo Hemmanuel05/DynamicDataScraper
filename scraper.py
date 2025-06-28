@@ -5,9 +5,11 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, ElementClickInterceptedException
+from webdriver_manager.firefox import GeckoDriverManager
+from selenium.webdriver.firefox.service import Service
 from bs4 import BeautifulSoup
 
 class SuffolkMapScraper:
@@ -17,23 +19,29 @@ class SuffolkMapScraper:
         self.map_url = "https://suffolk.digitalovine.com/modules.php?op=modload&name=_custom_maps&file=members#the-map"
         
     def setup_driver(self):
-        """Setup Chrome WebDriver with headless configuration"""
+        """Setup Firefox WebDriver with headless configuration"""
         try:
-            chrome_options = Options()
-            chrome_options.add_argument('--headless')
-            chrome_options.add_argument('--no-sandbox')
-            chrome_options.add_argument('--disable-dev-shm-usage')
-            chrome_options.add_argument('--disable-gpu')
-            chrome_options.add_argument('--window-size=1920,1080')
-            chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
+            firefox_options = Options()
+            firefox_options.add_argument('--headless')
+            firefox_options.add_argument('--no-sandbox')
+            firefox_options.add_argument('--disable-dev-shm-usage')
+            firefox_options.add_argument('--disable-gpu')
+            firefox_options.add_argument('--window-size=1920,1080')
             
-            self.driver = webdriver.Chrome(options=chrome_options)
+            # Set user agent
+            firefox_options.set_preference("general.useragent.override", 
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+            
+            # Setup service with GeckoDriverManager
+            service = Service(GeckoDriverManager().install())
+            
+            self.driver = webdriver.Firefox(service=service, options=firefox_options)
             self.wait = WebDriverWait(self.driver, 30)
             
-            logging.info('Chrome WebDriver initialized successfully')
+            logging.info('Firefox WebDriver initialized successfully')
             
         except Exception as e:
-            logging.error(f'Failed to setup Chrome WebDriver: {str(e)}')
+            logging.error(f'Failed to setup Firefox WebDriver: {str(e)}')
             raise
 
     def load_map_page(self):
