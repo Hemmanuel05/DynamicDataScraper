@@ -11,17 +11,21 @@ This is a web application that scrapes member data from the Suffolk sheep breede
 - **Styling**: Bootstrap 5.1.3 for responsive UI components
 - **Icons**: Font Awesome 6.0.0 for visual elements
 - **Design Pattern**: Single-page application with real-time progress updates
+- **Database Interface**: Dedicated database viewer with member management
 
 ### Backend Architecture
 - **Framework**: Flask (Python web framework)
-- **Architecture Pattern**: Simple MVC pattern with separation of concerns
+- **Database**: PostgreSQL with SQLAlchemy ORM
+- **Architecture Pattern**: MVC pattern with database persistence layer
 - **Threading**: Background thread processing for non-blocking scraping operations
 - **Logging**: Comprehensive logging to both file and console
+- **API**: RESTful endpoints for database operations
 
 ### Data Processing Pipeline
 1. **Data Extraction**: Selenium WebDriver scrapes the Suffolk map
 2. **Data Cleaning**: Custom cleaning module standardizes extracted data
-3. **Data Export**: Clean data exported to CSV format
+3. **Data Storage**: Clean data saved to PostgreSQL database
+4. **Data Export**: Clean data exported to CSV format
 
 ## Key Components
 
@@ -38,9 +42,10 @@ This is a web application that scrapes member data from the Suffolk sheep breede
 - **Architecture Decision**: Separate cleaning module allows for easy modification of cleaning rules without affecting scraper logic
 
 ### Web Interface (`main.py`, `templates/`, `static/`)
-- **Purpose**: Provides user-friendly interface for scraping operations
-- **Features**: Real-time progress tracking, status updates, error handling, CSV download
+- **Purpose**: Provides user-friendly interface for scraping operations and database management
+- **Features**: Real-time progress tracking, status updates, error handling, CSV download, database viewer
 - **Architecture Decision**: Flask chosen for simplicity and rapid development; JavaScript handles real-time updates via polling
+- **Database Integration**: PostgreSQL with SQLAlchemy ORM for persistent data storage
 
 ### Progress Tracking System
 - **Implementation**: Global status dictionary with thread-safe updates
@@ -89,10 +94,39 @@ This is a web application that scrapes member data from the Suffolk sheep breede
 - **Memory Management**: Log entries limited to prevent memory issues
 - **Error Handling**: Comprehensive exception handling with user-friendly error messages
 
+## Database Schema
+
+### ScrapedMember Table
+Stores cleaned member data with all 27 required CSV columns:
+- **Primary Fields**: business_name, owner1, owner2
+- **Contact Fields**: phone_primary, phone_cell, phone_office, phone_other, email1, email2, website
+- **Address Fields**: address_line1, address_line2, city, state_province_region, zip_postal_code, country
+- **Business Fields**: business_type, species, breeds
+- **Social Fields**: social_network1, social_network2, social_network3
+- **Metadata Fields**: last_updated, about, notes, data_source, data_source_url, date_scraped
+- **System Fields**: id (primary key), created_at, updated_at
+
+### ScrapeSession Table
+Tracks scraping operations and their results:
+- **Session Fields**: session_id (UUID), start_time, end_time, status
+- **Progress Fields**: total_pins_found, records_scraped, records_saved
+- **Output Fields**: csv_filename, error_message
+
+## API Endpoints
+
+### Database API Routes
+- **GET /api/members**: Paginated list of all scraped members
+- **GET /api/members/{id}**: Individual member details
+- **GET /api/sessions**: List of all scraping sessions
+- **GET /api/sessions/{session_id}**: Individual session details  
+- **GET /api/stats**: Database statistics and counts
+- **GET /database**: Database viewer interface
+
 ## Changelog
 
 Changelog:
-- June 28, 2025. Initial setup
+- June 28, 2025: Database integration added with PostgreSQL, SQLAlchemy models, API endpoints, and database viewer interface
+- June 28, 2025: Initial setup with web scraper, data cleaner, and Flask interface
 
 ## User Preferences
 

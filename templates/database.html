@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suffolk Map Scraper - Database</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container-fluid mt-3">
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <h1 class="card-title mb-0">
+                            <i class="fas fa-database me-2"></i>
+                            Suffolk Map Scraper - Database
+                        </h1>
+                        <a href="/" class="btn btn-light btn-sm">
+                            <i class="fas fa-arrow-left me-1"></i>
+                            Back to Scraper
+                        </a>
+                    </div>
+                    
+                    <div class="card-body">
+                        <!-- Stats Section -->
+                        <div class="row mb-4">
+                            <div class="col-md-3">
+                                <div class="card bg-success text-white">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-users fa-2x mb-2"></i>
+                                        <h3 id="totalMembers">-</h3>
+                                        <p class="mb-0">Total Members</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-info text-white">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-history fa-2x mb-2"></i>
+                                        <h3 id="totalSessions">-</h3>
+                                        <p class="mb-0">Total Sessions</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-primary text-white">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-check-circle fa-2x mb-2"></i>
+                                        <h3 id="completedSessions">-</h3>
+                                        <p class="mb-0">Completed</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-danger text-white">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-times-circle fa-2x mb-2"></i>
+                                        <h3 id="failedSessions">-</h3>
+                                        <p class="mb-0">Failed</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Tabs -->
+                        <ul class="nav nav-tabs" id="dbTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="members-tab" data-bs-toggle="tab" data-bs-target="#members" type="button" role="tab">
+                                    <i class="fas fa-users me-1"></i>
+                                    Members
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="sessions-tab" data-bs-toggle="tab" data-bs-target="#sessions" type="button" role="tab">
+                                    <i class="fas fa-history me-1"></i>
+                                    Sessions
+                                </button>
+                            </li>
+                        </ul>
+                        
+                        <div class="tab-content mt-3" id="dbTabContent">
+                            <!-- Members Tab -->
+                            <div class="tab-pane fade show active" id="members" role="tabpanel">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h5>Scraped Members</h5>
+                                    <div>
+                                        <button class="btn btn-sm btn-outline-primary" onclick="loadMembers()">
+                                            <i class="fas fa-refresh me-1"></i>
+                                            Refresh
+                                        </button>
+                                        <button class="btn btn-sm btn-success" onclick="exportMembers()">
+                                            <i class="fas fa-download me-1"></i>
+                                            Export CSV
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Business Name</th>
+                                                <th>Owner 1</th>
+                                                <th>Owner 2</th>
+                                                <th>Phone</th>
+                                                <th>Email</th>
+                                                <th>City</th>
+                                                <th>State</th>
+                                                <th>Date Scraped</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="membersTable">
+                                            <tr>
+                                                <td colspan="10" class="text-center text-muted">
+                                                    <i class="fas fa-spinner fa-spin me-2"></i>
+                                                    Loading members...
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <!-- Pagination -->
+                                <nav id="membersPagination" class="d-none">
+                                    <ul class="pagination justify-content-center">
+                                        <!-- Pagination buttons will be inserted here -->
+                                    </ul>
+                                </nav>
+                            </div>
+                            
+                            <!-- Sessions Tab -->
+                            <div class="tab-pane fade" id="sessions" role="tabpanel">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h5>Scraping Sessions</h5>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="loadSessions()">
+                                        <i class="fas fa-refresh me-1"></i>
+                                        Refresh
+                                    </button>
+                                </div>
+                                
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th>Session ID</th>
+                                                <th>Status</th>
+                                                <th>Start Time</th>
+                                                <th>End Time</th>
+                                                <th>Pins Found</th>
+                                                <th>Records Scraped</th>
+                                                <th>Records Saved</th>
+                                                <th>CSV File</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="sessionsTable">
+                                            <tr>
+                                                <td colspan="8" class="text-center text-muted">
+                                                    <i class="fas fa-spinner fa-spin me-2"></i>
+                                                    Loading sessions...
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Member Detail Modal -->
+    <div class="modal fade" id="memberModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Member Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="memberModalBody">
+                    <!-- Member details will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentPage = 1;
+        const perPage = 25;
+        
+        // Load initial data
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStats();
+            loadMembers();
+            loadSessions();
+        });
+        
+        function loadStats() {
+            fetch('/api/stats')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('totalMembers').textContent = data.total_members || 0;
+                    document.getElementById('totalSessions').textContent = data.total_sessions || 0;
+                    document.getElementById('completedSessions').textContent = data.completed_sessions || 0;
+                    document.getElementById('failedSessions').textContent = data.failed_sessions || 0;
+                })
+                .catch(error => console.error('Error loading stats:', error));
+        }
+        
+        function loadMembers(page = 1) {
+            currentPage = page;
+            fetch(`/api/members?page=${page}&per_page=${perPage}`)
+                .then(response => response.json())
+                .then(data => {
+                    const tbody = document.getElementById('membersTable');
+                    tbody.innerHTML = '';
+                    
+                    if (data.members && data.members.length > 0) {
+                        data.members.forEach(member => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${member.id}</td>
+                                <td>${member.business_name || '-'}</td>
+                                <td>${member.owner1 || '-'}</td>
+                                <td>${member.owner2 || '-'}</td>
+                                <td>${member.phone_primary || '-'}</td>
+                                <td>${member.email1 || '-'}</td>
+                                <td>${member.city || '-'}</td>
+                                <td>${member.state_province_region || '-'}</td>
+                                <td>${member.date_scraped || '-'}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-info" onclick="viewMember(${member.id})">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
+                            `;
+                            tbody.appendChild(row);
+                        });
+                        
+                        // Update pagination
+                        updatePagination(data.current_page, data.pages, data.total);
+                    } else {
+                        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">No members found</td></tr>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading members:', error);
+                    document.getElementById('membersTable').innerHTML = 
+                        '<tr><td colspan="10" class="text-center text-danger">Error loading members</td></tr>';
+                });
+        }
+        
+        function loadSessions() {
+            fetch('/api/sessions')
+                .then(response => response.json())
+                .then(data => {
+                    const tbody = document.getElementById('sessionsTable');
+                    tbody.innerHTML = '';
+                    
+                    if (data && data.length > 0) {
+                        data.forEach(session => {
+                            const row = document.createElement('tr');
+                            const statusClass = session.status === 'completed' ? 'success' : 
+                                               session.status === 'failed' ? 'danger' : 'warning';
+                            
+                            row.innerHTML = `
+                                <td><small>${session.session_id}</small></td>
+                                <td><span class="badge bg-${statusClass}">${session.status}</span></td>
+                                <td>${new Date(session.start_time).toLocaleString()}</td>
+                                <td>${session.end_time ? new Date(session.end_time).toLocaleString() : '-'}</td>
+                                <td>${session.total_pins_found || 0}</td>
+                                <td>${session.records_scraped || 0}</td>
+                                <td>${session.records_saved || 0}</td>
+                                <td>${session.csv_filename ? `<a href="/download/${session.csv_filename}" class="btn btn-sm btn-outline-primary"><i class="fas fa-download"></i></a>` : '-'}</td>
+                            `;
+                            tbody.appendChild(row);
+                        });
+                    } else {
+                        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No sessions found</td></tr>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading sessions:', error);
+                    document.getElementById('sessionsTable').innerHTML = 
+                        '<tr><td colspan="8" class="text-center text-danger">Error loading sessions</td></tr>';
+                });
+        }
+        
+        function updatePagination(currentPage, totalPages, totalItems) {
+            const pagination = document.getElementById('membersPagination');
+            const paginationList = pagination.querySelector('ul');
+            
+            if (totalPages <= 1) {
+                pagination.classList.add('d-none');
+                return;
+            }
+            
+            pagination.classList.remove('d-none');
+            paginationList.innerHTML = '';
+            
+            // Previous button
+            const prevItem = document.createElement('li');
+            prevItem.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+            prevItem.innerHTML = `<a class="page-link" href="#" onclick="loadMembers(${currentPage - 1})">Previous</a>`;
+            paginationList.appendChild(prevItem);
+            
+            // Page numbers
+            for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) {
+                const pageItem = document.createElement('li');
+                pageItem.className = `page-item ${i === currentPage ? 'active' : ''}`;
+                pageItem.innerHTML = `<a class="page-link" href="#" onclick="loadMembers(${i})">${i}</a>`;
+                paginationList.appendChild(pageItem);
+            }
+            
+            // Next button
+            const nextItem = document.createElement('li');
+            nextItem.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+            nextItem.innerHTML = `<a class="page-link" href="#" onclick="loadMembers(${currentPage + 1})">Next</a>`;
+            paginationList.appendChild(nextItem);
+        }
+        
+        function viewMember(memberId) {
+            fetch(`/api/members/${memberId}`)
+                .then(response => response.json())
+                .then(member => {
+                    const modalBody = document.getElementById('memberModalBody');
+                    modalBody.innerHTML = `
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Business Information</h6>
+                                <p><strong>Business Name:</strong> ${member.business_name || '-'}</p>
+                                <p><strong>Business Type:</strong> ${member.business_type || '-'}</p>
+                                <p><strong>Species:</strong> ${member.species || '-'}</p>
+                                <p><strong>Breeds:</strong> ${member.breeds || '-'}</p>
+                                
+                                <h6>Contact Information</h6>
+                                <p><strong>Phone Primary:</strong> ${member.phone_primary || '-'}</p>
+                                <p><strong>Phone Cell:</strong> ${member.phone_cell || '-'}</p>
+                                <p><strong>Phone Office:</strong> ${member.phone_office || '-'}</p>
+                                <p><strong>Email 1:</strong> ${member.email1 || '-'}</p>
+                                <p><strong>Email 2:</strong> ${member.email2 || '-'}</p>
+                                <p><strong>Website:</strong> ${member.website || '-'}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Owner Information</h6>
+                                <p><strong>Owner 1:</strong> ${member.owner1 || '-'}</p>
+                                <p><strong>Owner 2:</strong> ${member.owner2 || '-'}</p>
+                                
+                                <h6>Address Information</h6>
+                                <p><strong>Address Line 1:</strong> ${member.address_line1 || '-'}</p>
+                                <p><strong>Address Line 2:</strong> ${member.address_line2 || '-'}</p>
+                                <p><strong>City:</strong> ${member.city || '-'}</p>
+                                <p><strong>State/Province:</strong> ${member.state_province_region || '-'}</p>
+                                <p><strong>ZIP/Postal Code:</strong> ${member.zip_postal_code || '-'}</p>
+                                <p><strong>Country:</strong> ${member.country || '-'}</p>
+                                
+                                <h6>Metadata</h6>
+                                <p><strong>Data Source:</strong> ${member.data_source || '-'}</p>
+                                <p><strong>Date Scraped:</strong> ${member.date_scraped || '-'}</p>
+                                <p><strong>Last Updated:</strong> ${member.last_updated || '-'}</p>
+                            </div>
+                        </div>
+                        ${member.about ? `<div class="mt-3"><h6>About</h6><p>${member.about}</p></div>` : ''}
+                        ${member.notes ? `<div class="mt-3"><h6>Notes</h6><p>${member.notes}</p></div>` : ''}
+                    `;
+                    
+                    const modal = new bootstrap.Modal(document.getElementById('memberModal'));
+                    modal.show();
+                })
+                .catch(error => {
+                    console.error('Error loading member details:', error);
+                    alert('Error loading member details');
+                });
+        }
+        
+        function exportMembers() {
+            // Create a simple CSV export
+            fetch('/api/members?per_page=10000')  // Get all members
+                .then(response => response.json())
+                .then(data => {
+                    if (data.members && data.members.length > 0) {
+                        const csv = convertToCSV(data.members);
+                        downloadCSV(csv, `suffolk_members_export_${new Date().toISOString().split('T')[0]}.csv`);
+                    } else {
+                        alert('No members to export');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error exporting members:', error);
+                    alert('Error exporting members');
+                });
+        }
+        
+        function convertToCSV(data) {
+            const headers = [
+                'Business Name', 'Owner1', 'Owner2', 'Phone_primary', 'Phone_cell', 
+                'Phone_office', 'Phone_other', 'Address_Line1', 'Address_Line2', 
+                'City', 'State / Province / Region', 'Zip / Postal Code', 'Country', 
+                'Email1', 'Email2', 'Website', 'Business Type', 'Species', 'Breed(s)', 
+                'Social Network1', 'Social Network 2', 'Social Network 3', 
+                'Last Updated', 'About', 'Notes', 'Data Source', 'Data Source URL', 
+                'Date Scraped'
+            ];
+            
+            const csvContent = [headers.join(',')];
+            
+            data.forEach(member => {
+                const row = headers.map(header => {
+                    const key = header.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                    let value = member[key] || '';
+                    // Escape quotes and wrap in quotes if contains comma
+                    if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+                        value = '"' + value.replace(/"/g, '""') + '"';
+                    }
+                    return value;
+                });
+                csvContent.push(row.join(','));
+            });
+            
+            return csvContent.join('\n');
+        }
+        
+        function downloadCSV(csv, filename) {
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+    </script>
+</body>
+</html>
