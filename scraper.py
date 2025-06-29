@@ -317,7 +317,14 @@ class SuffolkMapScraper:
             
             if popup_content:
                 # Extract and parse the popup content
-                data = self.parse_popup_content(popup_content.text)
+                # Try to get HTML content first for better parsing
+                try:
+                    html_content = popup_content.get_attribute('innerHTML')
+                    text_content = popup_content.text
+                    data = self.parse_popup_content(text_content, html_content)
+                except:
+                    # Fallback to text content only
+                    data = self.parse_popup_content(popup_content.text, None)
                 
                 # Close popup if possible
                 self.close_popup()
@@ -331,7 +338,7 @@ class SuffolkMapScraper:
             logging.error(f'Error extracting pin data: {str(e)}')
             return None
 
-    def parse_popup_content(self, content):
+    def parse_popup_content(self, content, html_content=None):
         """Parse the popup content to extract member data"""
         try:
             data = {
@@ -365,73 +372,203 @@ class SuffolkMapScraper:
                 'date_scraped': time.strftime('%Y-%m-%d')
             }
             
-            lines = content.split('\n')
-            current_field = None
+            # Filter out Google Maps interface elements and noise
+            google_noise = [
+                'keyboard shortcuts', 'map data', 'google', 'inegi', 'terms of use',
+                'report a map error', 'satellite', 'map', 'terrain', 'labels',
+                '©2025', 'imagery', 'close', 'directions'
+            ]
             
-            for line in lines:
+            lines = []
+            for line in content.split('\n'):
                 line = line.strip()
                 if not line:
                     continue
-                
-                # Try to identify and extract different fields
+                    
+                # Skip Google Maps interface elements
                 line_lower = line.lower()
-                
-                # Business/Farm name (usually first or prominent)
-                if not data['business_name'] and any(keyword in line_lower for keyword in ['farm', 'ranch', 'acres', 'livestock']):
-                    data['business_name'] = line
-                elif not data['business_name'] and len(line) > 3 and not any(char.isdigit() for char in line):
-                    # Likely a business name if it's not too short and has no digits
-                    data['business_name'] = line
-                
-                # Phone numbers
-                phone_pattern = r'[\(]?[\d\s\-\.\(\)]{10,}'
-                if re.search(phone_pattern, line):
-                    phone = re.sub(r'[^\d]', '', line)
-                    if len(phone) >= 10:
-                        if not data['phone_primary']:
-                            data['phone_primary'] = line
-                        elif not data['phone_cell']:
-                            data['phone_cell'] = line
-                        elif not data['phone_office']:
-                            data['phone_office'] = line
-                
-                # Email addresses
-                email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-                if re.search(email_pattern, line):
-                    if not data['email1']:
-                        data['email1'] = line
-                    elif not data['email2']:
-                        data['email2'] = line
-                
-                # Website
-                if 'http' in line_lower or 'www.' in line_lower:
-                    data['website'] = line
-                
-                # Address components
-                if re.search(r'\d+\s+\w+', line) and not data['address_line1']:
-                    # Looks like street address
-                    data['address_line1'] = line
-                
-                # State abbreviations or full state names
-                state_pattern = r'\b(A[LK]|A[SZRKLY]|C[AOT]|D[CE]|F[L]|G[A]|H[I]|I[DLANO]|K[SY]|L[A]|M[EHDAINSOT]|N[EVHJMYCD]|O[HKR]|P[ARW]|R[I]|S[CD]|T[NX]|U[T]|V[AIT]|W[AVIY])\b'
-                if re.search(state_pattern, line, re.IGNORECASE):
-                    data['state'] = line
-                
-                # ZIP codes
-                zip_pattern = r'\b\d{5}(-\d{4})?\b'
-                if re.search(zip_pattern, line):
-                    data['zip_code'] = re.search(zip_pattern, line).group()
-                
-                # Owner names (look for patterns like "John & Jane Doe" or "John Doe")
-                if re.search(r'^[A-Z][a-z]+ [A-Z][a-z]+', line) and not any(keyword in line_lower for keyword in ['farm', 'ranch', 'acres']):
-                    if not data['owner1']:
-                        data['owner1'] = line
-                    elif not data['owner2']:
-                        data['owner2'] = line
+                if any(noise in line_lower for noise in google_noise):
+                    continue
+                    
+                # Skip single characters or very short strings
+                if len(line) < 3:
+                    continue
+                    
+                lines.append(line)
             
-            # If no business name found, use owner name
-            if not data['business_name'] and data['owner1']:
-                data['business_name'] = data['owner1']
+            # Log the cleaned content for debugging
+            logging.info(f'Cleaned popup content lines: {lines[:5]}...' if len(lines) > 5 else f'Cleaned popup content lines: {lines}')
+            
+            all_text = ' '.join(lines)
+            
+            # Also try parsing HTML content if available for structured data
+            if html_content:
+                try:
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(html_content, 'html.parser')
+                    
+                    # Look for structured data in HTML
+                    # Try to find links (potential websites/emails)
+                    links = soup.find_all('a', href=True)
+                    for link in links:
+                        href = link.get('href', '')
+                        if 'mailto:' in href and not data['email1']:
+                            data['email1'] = href.replace('mailto:', '').strip()
+                        elif 'http' in href and not data['website']:
+                            data['website'] = href.strip()
+                    
+                    # Look for phone numbers in specific tags or patterns
+                    phone_tags = soup.find_all(text=True)
+                    for tag_text in phone_tags:
+                        if re.search(r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}', tag_text):
+                            phone_clean = re.sub(r'[^\d]', '', tag_text)
+                            if len(phone_clean) >= 10 and not data['phone_primary']:
+                                data['phone_primary'] = tag_text.strip()
+                                break
+                    
+                except Exception as e:
+                    logging.debug(f'HTML parsing failed: {str(e)}')
+                    pass
+            
+            # Extract different data types with improved patterns
+            
+            # Phone numbers - multiple patterns
+            phone_patterns = [
+                r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}',  # (555) 123-4567 or 555-123-4567
+                r'\d{3}[-.\s]?\d{3}[-.\s]?\d{4}',        # 555.123.4567
+                r'\d{10,}',                               # 5551234567
+                r'phone:?\s*([^\n\r]+)',                  # Phone: xxx
+                r'tel:?\s*([^\n\r]+)',                    # Tel: xxx
+                r'cell:?\s*([^\n\r]+)',                   # Cell: xxx
+                r'mobile:?\s*([^\n\r]+)'                  # Mobile: xxx
+            ]
+            
+            phones_found = []
+            for pattern in phone_patterns:
+                matches = re.findall(pattern, all_text, re.IGNORECASE)
+                for match in matches:
+                    # Clean phone number
+                    if isinstance(match, tuple):
+                        match = match[0] if match else ''
+                    phone_clean = re.sub(r'[^\d]', '', str(match))
+                    if len(phone_clean) >= 10:
+                        phones_found.append(match.strip())
+            
+            # Assign phones to different fields
+            if phones_found:
+                if len(phones_found) >= 1:
+                    data['phone_primary'] = phones_found[0]
+                if len(phones_found) >= 2:
+                    data['phone_cell'] = phones_found[1]
+                if len(phones_found) >= 3:
+                    data['phone_office'] = phones_found[2]
+                if len(phones_found) >= 4:
+                    data['phone_other'] = phones_found[3]
+            
+            # Email addresses - improved pattern
+            email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+            emails = re.findall(email_pattern, all_text)
+            if emails:
+                data['email1'] = emails[0]
+                if len(emails) > 1:
+                    data['email2'] = emails[1]
+            
+            # Website/URLs
+            url_patterns = [
+                r'https?://[^\s]+',
+                r'www\.[^\s]+',
+                r'[a-zA-Z0-9.-]+\.(com|net|org|edu|gov)[^\s]*'
+            ]
+            for pattern in url_patterns:
+                urls = re.findall(pattern, all_text, re.IGNORECASE)
+                if urls:
+                    data['website'] = urls[0]
+                    break
+            
+            # Business/Farm names and owner names
+            name_candidates = []
+            for line in lines:
+                line_clean = line.strip()
+                if not line_clean:
+                    continue
+                    
+                # Skip lines that look like addresses or other data
+                if re.search(r'\d{5}(-\d{4})?', line_clean):  # ZIP code
+                    continue
+                if re.search(r'@', line_clean):  # Email
+                    continue
+                if re.search(r'\d{3}[-.\s]?\d{3}[-.\s]?\d{4}', line_clean):  # Phone
+                    continue
+                if re.search(r'https?://', line_clean):  # URL
+                    continue
+                    
+                # Check if this looks like a name or business
+                if len(line_clean) > 2 and re.search(r'[A-Za-z]', line_clean):
+                    name_candidates.append(line_clean)
+            
+            # Assign names to appropriate fields
+            if name_candidates:
+                # First candidate is likely business name or primary owner
+                first_name = name_candidates[0]
+                
+                # If it contains farm/ranch/livestock keywords, it's likely business name
+                if any(keyword in first_name.lower() for keyword in ['farm', 'ranch', 'acres', 'livestock', 'suffolks', 'sheep']):
+                    data['business_name'] = first_name
+                    if len(name_candidates) > 1:
+                        data['owner1'] = name_candidates[1]
+                    if len(name_candidates) > 2:
+                        data['owner2'] = name_candidates[2]
+                else:
+                    # Likely owner name
+                    data['owner1'] = first_name
+                    if len(name_candidates) > 1:
+                        second_name = name_candidates[1]
+                        if any(keyword in second_name.lower() for keyword in ['farm', 'ranch', 'acres', 'livestock', 'suffolks', 'sheep']):
+                            data['business_name'] = second_name
+                        else:
+                            data['owner2'] = second_name
+                    
+                    # If no business name found yet, use owner name
+                    if not data['business_name']:
+                        data['business_name'] = data['owner1']
+            
+            # Address parsing
+            address_lines = []
+            for line in lines:
+                # Look for address patterns
+                if re.search(r'\d+\s+[A-Za-z]', line):  # Street address pattern
+                    address_lines.append(line)
+                elif re.search(r'[A-Z]{2}\s+\d{5}', line):  # State ZIP pattern
+                    address_lines.append(line)
+            
+            if address_lines:
+                data['address_line1'] = address_lines[0]
+                if len(address_lines) > 1:
+                    data['address_line2'] = address_lines[1]
+            
+            # Extract city, state, ZIP from address-like lines
+            for line in lines:
+                # Look for ZIP codes
+                zip_match = re.search(r'\b(\d{5}(-\d{4})?)\b', line)
+                if zip_match and not data['zip_code']:
+                    data['zip_code'] = zip_match.group(1)
+                    
+                    # Try to extract city and state from same line
+                    # Pattern: CITY, STATE ZIP
+                    city_state_pattern = r'([A-Z\s]+),\s*([A-Z]{2})\s+\d{5}'
+                    cs_match = re.search(city_state_pattern, line)
+                    if cs_match:
+                        data['city'] = cs_match.group(1).strip()
+                        data['state'] = cs_match.group(2).strip()
+            
+            # Species and breeds - look for Suffolk-specific terms
+            for line in lines:
+                line_lower = line.lower()
+                if 'suffolk' in line_lower and not data['species']:
+                    data['species'] = 'Sheep'
+                    data['breeds'] = 'Suffolk'
+                elif any(breed in line_lower for breed in ['sheep', 'lamb', 'ewe', 'ram']) and not data['species']:
+                    data['species'] = 'Sheep'
             
             return data
             
