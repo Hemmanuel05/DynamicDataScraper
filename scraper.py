@@ -376,7 +376,8 @@ class SuffolkMapScraper:
             google_noise = [
                 'keyboard shortcuts', 'map data', 'google', 'inegi', 'terms of use',
                 'report a map error', 'satellite', 'map', 'terrain', 'labels',
-                '©2025', 'imagery', 'close', 'directions'
+                '©2025', 'imagery', 'close', 'directions', 'terms', 'visit website',
+                '10 km', '500 km', 'km', 'miles', 'mi'
             ]
             
             lines = []
@@ -411,20 +412,32 @@ class SuffolkMapScraper:
                     # Try to find links (potential websites/emails)
                     links = soup.find_all('a', href=True)
                     for link in links:
-                        href = link.get('href', '')
-                        if 'mailto:' in href and not data['email1']:
-                            data['email1'] = href.replace('mailto:', '').strip()
-                        elif 'http' in href and not data['website']:
-                            data['website'] = href.strip()
+                        try:
+                            href_attr = link.get('href')
+                            if href_attr:
+                                href = str(href_attr)
+                                if 'mailto:' in href and not data['email1']:
+                                    email = href.replace('mailto:', '').strip()
+                                    data['email1'] = email
+                                elif 'http' in href and not data['website']:
+                                    # Filter out Google Maps URLs
+                                    if not any(domain in href.lower() for domain in excluded_domains):
+                                        data['website'] = href.strip()
+                        except:
+                            continue
                     
-                    # Look for phone numbers in specific tags or patterns
-                    phone_tags = soup.find_all(text=True)
-                    for tag_text in phone_tags:
-                        if re.search(r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}', tag_text):
-                            phone_clean = re.sub(r'[^\d]', '', tag_text)
-                            if len(phone_clean) >= 10 and not data['phone_primary']:
-                                data['phone_primary'] = tag_text.strip()
-                                break
+                    # Look for phone numbers in text content
+                    text_elements = soup.find_all(text=True)
+                    for text_elem in text_elements:
+                        try:
+                            text_str = str(text_elem).strip()
+                            if text_str and re.search(r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}', text_str):
+                                phone_clean = re.sub(r'[^\d]', '', text_str)
+                                if len(phone_clean) >= 10 and not data['phone_primary']:
+                                    data['phone_primary'] = text_str.strip()
+                                    break
+                        except:
+                            continue
                     
                 except Exception as e:
                     logging.debug(f'HTML parsing failed: {str(e)}')
@@ -473,16 +486,27 @@ class SuffolkMapScraper:
                 if len(emails) > 1:
                     data['email2'] = emails[1]
             
-            # Website/URLs
+            # Website/URLs - filter out Google Maps and other unwanted URLs
             url_patterns = [
                 r'https?://[^\s]+',
                 r'www\.[^\s]+',
                 r'[a-zA-Z0-9.-]+\.(com|net|org|edu|gov)[^\s]*'
             ]
+            
+            excluded_domains = [
+                'google.com', 'maps.google.com', 'gstatic.com', 'googleapis.com',
+                'maps.gstatic.com', 'digitalovine.com'
+            ]
+            
             for pattern in url_patterns:
                 urls = re.findall(pattern, all_text, re.IGNORECASE)
-                if urls:
-                    data['website'] = urls[0]
+                for url in urls:
+                    url_clean = url.lower().strip()
+                    # Skip Google Maps and other unwanted URLs
+                    if not any(domain in url_clean for domain in excluded_domains):
+                        data['website'] = url
+                        break
+                if data['website']:
                     break
             
             # Business/Farm names and owner names
@@ -511,22 +535,41 @@ class SuffolkMapScraper:
                 # First candidate is likely business name or primary owner
                 first_name = name_candidates[0]
                 
-                # If it contains farm/ranch/livestock keywords, it's likely business name
-                if any(keyword in first_name.lower() for keyword in ['farm', 'ranch', 'acres', 'livestock', 'suffolks', 'sheep']):
-                    data['business_name'] = first_name
+                # Check if first name contains joint names (e.g., "Earl & Cathy Marsh")
+                joint_patterns = [' & ', ' and ', ' + ', '/', ' / ']
+                is_joint_name = any(pattern in first_name for pattern in joint_patterns)
+                
+                if is_joint_name:
+                    # Parse joint names
+                    parsed_owners = self.parse_joint_names(first_name)
+                    if parsed_owners:
+                        data['owner1'] = parsed_owners.get('owner1', '')
+                        data['owner2'] = parsed_owners.get('owner2', '')
+                        data['business_name'] = parsed_owners.get('business_name', first_name)
+                elif any(keyword in first_name.lower() for keyword in ['farm', 'ranch', 'acres', 'livestock', 'suffolks', 'sheep']):
+                    # It's likely a business name
+                    data['business_name'] = self.apply_proper_case(first_name)
                     if len(name_candidates) > 1:
-                        data['owner1'] = name_candidates[1]
+                        # Check if second candidate is also a joint name
+                        second_name = name_candidates[1]
+                        if any(pattern in second_name for pattern in joint_patterns):
+                            parsed_owners = self.parse_joint_names(second_name)
+                            if parsed_owners:
+                                data['owner1'] = parsed_owners.get('owner1', '')
+                                data['owner2'] = parsed_owners.get('owner2', '')
+                        else:
+                            data['owner1'] = self.apply_proper_case(second_name)
                     if len(name_candidates) > 2:
-                        data['owner2'] = name_candidates[2]
+                        data['owner2'] = self.apply_proper_case(name_candidates[2])
                 else:
                     # Likely owner name
-                    data['owner1'] = first_name
+                    data['owner1'] = self.apply_proper_case(first_name)
                     if len(name_candidates) > 1:
                         second_name = name_candidates[1]
                         if any(keyword in second_name.lower() for keyword in ['farm', 'ranch', 'acres', 'livestock', 'suffolks', 'sheep']):
-                            data['business_name'] = second_name
+                            data['business_name'] = self.apply_proper_case(second_name)
                         else:
-                            data['owner2'] = second_name
+                            data['owner2'] = self.apply_proper_case(second_name)
                     
                     # If no business name found yet, use owner name
                     if not data['business_name']:
@@ -575,6 +618,91 @@ class SuffolkMapScraper:
         except Exception as e:
             logging.error(f'Error parsing popup content: {str(e)}')
             return None
+
+    def parse_joint_names(self, name_string):
+        """Parse joint names like 'Earl & Cathy Marsh' into separate owners"""
+        try:
+            # Patterns for joint names
+            joint_patterns = [' & ', ' and ', ' + ', '/', ' / ']
+            
+            for pattern in joint_patterns:
+                if pattern in name_string:
+                    parts = name_string.split(pattern)
+                    if len(parts) == 2:
+                        left_part = parts[0].strip()
+                        right_part = parts[1].strip()
+                        
+                        # Check if they share a last name
+                        left_words = left_part.split()
+                        right_words = right_part.split()
+                        
+                        if len(left_words) >= 2 and len(right_words) == 1:
+                            # Case: "Earl & Cathy Marsh" -> "Earl Marsh" & "Cathy Marsh"
+                            last_name = left_words[-1]
+                            owner1 = self.apply_proper_case(f"{left_words[0]} {last_name}")
+                            owner2 = self.apply_proper_case(f"{right_words[0]} {last_name}")
+                            business_name = self.apply_proper_case(name_string)
+                        elif len(left_words) >= 2 and len(right_words) >= 2:
+                            # Case: "John Smith & Jane Doe" -> separate names
+                            owner1 = self.apply_proper_case(left_part)
+                            owner2 = self.apply_proper_case(right_part)
+                            business_name = self.apply_proper_case(name_string)
+                        else:
+                            # Fallback
+                            owner1 = self.apply_proper_case(left_part)
+                            owner2 = self.apply_proper_case(right_part)
+                            business_name = self.apply_proper_case(name_string)
+                        
+                        return {
+                            'owner1': owner1,
+                            'owner2': owner2,
+                            'business_name': business_name
+                        }
+            
+            return None
+            
+        except Exception as e:
+            logging.error(f'Error parsing joint names: {str(e)}')
+            return None
+
+    def apply_proper_case(self, text):
+        """Apply proper case formatting to names and titles"""
+        if not text:
+            return text
+            
+        try:
+            # Handle special cases for all caps
+            if text.isupper():
+                # Convert to title case but handle special words
+                words = text.split()
+                proper_words = []
+                
+                for word in words:
+                    # Handle special abbreviations that should stay uppercase
+                    if word in ['LLC', 'INC', 'CORP', 'LTD', 'CO']:
+                        proper_words.append(word)
+                    # Handle Roman numerals
+                    elif re.match(r'^[IVX]+$', word):
+                        proper_words.append(word)
+                    # Handle single letters or initials
+                    elif len(word) == 1:
+                        proper_words.append(word.upper())
+                    # Handle hyphenated names
+                    elif '-' in word:
+                        hyphen_parts = [part.capitalize() for part in word.split('-')]
+                        proper_words.append('-'.join(hyphen_parts))
+                    # Regular words
+                    else:
+                        proper_words.append(word.capitalize())
+                
+                return ' '.join(proper_words)
+            else:
+                # Text is already in mixed case, just clean it up
+                return text.strip()
+                
+        except Exception as e:
+            logging.error(f'Error applying proper case: {str(e)}')
+            return text
 
     def close_popup(self):
         """Try to close any open popup"""
